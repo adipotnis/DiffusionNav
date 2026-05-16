@@ -60,7 +60,6 @@ class VJepa2NavModel(nn.Module):
         self.cfg_guidance_scale = cfg_guidance_scale
         self._cfg_enabled = cfg_dropout_prob > 0.0 or cfg_guidance_scale > 1.0
 
-        # frozen vjepa2 encoder (shared for obs and goal)
         print("loading vjepa2_vit_large...")
         loaded = torch.hub.load("facebookresearch/vjepa2", "vjepa2_vit_large")
         self.encoder = loaded[0] if isinstance(loaded, tuple) else loaded
@@ -68,18 +67,17 @@ class VJepa2NavModel(nn.Module):
         for p in self.encoder.parameters():
             p.requires_grad = False
 
-        # token projections + type embeddings (0=obs, 1=goal)
+        # type embeddings: 0=obs, 1=goal
         self.obs_proj = nn.Linear(VJEPA2_LARGE_EMBED_DIM, hidden_dim)
         self.goal_proj = nn.Linear(VJEPA2_LARGE_EMBED_DIM, hidden_dim)
         self.type_embed = nn.Parameter(torch.zeros(2, hidden_dim))
         nn.init.normal_(self.type_embed, std=0.02)
 
-        # learned null token replacing goal tokens for cfg
+        # learned null token replacing goal tokens for classifier-free guidance
         if self._cfg_enabled:
             self.null_goal_token = nn.Parameter(torch.zeros(1, 1, hidden_dim))
             nn.init.normal_(self.null_goal_token, std=0.02)
 
-        # fusion transformer over [obs_tokens; goal_tokens]
         enc_layer = nn.TransformerEncoderLayer(
             d_model=hidden_dim,
             nhead=num_attn_heads,
@@ -90,7 +88,6 @@ class VJepa2NavModel(nn.Module):
         )
         self.fusion = nn.TransformerEncoder(enc_layer, num_layers=num_fusion_layers)
 
-        # learned CLS-style query that cross-attends over fused tokens to produce cond
         self.pool_query = nn.Parameter(torch.zeros(1, 1, hidden_dim))
         nn.init.normal_(self.pool_query, std=0.02)
         self.pool_attn = nn.MultiheadAttention(hidden_dim, num_attn_heads, batch_first=True)
@@ -104,7 +101,6 @@ class VJepa2NavModel(nn.Module):
         )
         self.cond_merge = nn.Linear(hidden_dim * 2, hidden_dim)
 
-        # diffusion denoiser (unet1d only)
         self.time_embed = nn.Sequential(
             nn.Linear(1, hidden_dim),
             nn.GELU(),
@@ -223,7 +219,6 @@ class VJepa2NavModel(nn.Module):
         b = obs.shape[0]
 
         if target is not None:
-            # training: cfg dropout per-sample
             drop_mask = None
             if self.cfg_dropout_prob > 0.0 and self.training:
                 drop_mask = torch.rand(b, device=obs.device) < self.cfg_dropout_prob
@@ -239,7 +234,7 @@ class VJepa2NavModel(nn.Module):
             noise_pred = self.predict_noise(noisy, cond, t)
             return noise_pred, noise
 
-        # inference: precompute cond and (optionally) null cond once
+        # precompute cond and (optionally) null cond once for inference
         cond = self.get_condition(obs, goal_image, goal_xy)
         null_cond = None
         if self.cfg_guidance_scale > 1.0 and self._cfg_enabled:

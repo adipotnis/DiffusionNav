@@ -20,13 +20,11 @@ import wandb
 from vjepa_dataset import VJEPADataset
 from model_vjepa_diffusion import VJepa2NavModel, IMAGENET_MEAN, IMAGENET_STD
 
-    # [ ] do we need masked action loss?
 
 def diffusion_loss(noise_pred: torch.Tensor, noise_target: torch.Tensor, mask: torch.Tensor):
     """mse loss on noise prediction."""
     mse = F.mse_loss(noise_pred, noise_target, reduction="none").mean(dim=-1)
-    # loss = (mse * mask).sum() / (mask.sum() + 1e-2)  # masked version
-    loss = mse.mean()  # unmasked: train on all samples
+    loss = mse.mean()
     return loss, {"diffusion_loss": loss.detach()}
 
 
@@ -55,7 +53,6 @@ def visualize_multi_trajectories(samples: torch.Tensor, target: torch.Tensor, n_
     for i, ax in enumerate(axes):
         ax.plot(target[i, :, 0], target[i, :, 1], "g.-", label="gt", linewidth=2, markersize=8)
         ax.plot(target[i, -1, 0], target[i, -1, 1], "bo", label="goal", markersize=10)
-        # plot all samples
         for s in range(samples.shape[1]):
             alpha = 0.5 if s > 0 else 1.0
             label = "samples" if s == 0 else None
@@ -93,8 +90,8 @@ def train_epoch(model, dataloader, optimizer, device, context_size, log_freq, us
         noise_pred, noise_target = model(obs_norm, goal_norm, goal_xy, target=actions)
         loss, metrics = diffusion_loss(noise_pred, noise_target, mask)
         loss.backward()
-        
-        # compute grad norm before clipping
+
+        # grad norm computed before clipping for accurate logging
         base_model = model.module if hasattr(model, "module") else model
         grad_norm = sum(p.grad.norm().item() for p in base_model.parameters() if p.grad is not None)
         
@@ -114,16 +111,14 @@ def train_epoch(model, dataloader, optimizer, device, context_size, log_freq, us
                 "train/grad_norm": grad_norm,
                 "train/goal_xy_norm": goal_xy.norm(dim=-1).mean().item(),
             }
-            
-            # log data loading metrics every 50 steps
+
             if step % 50 == 0:
                 avg_data_time = total_data_time / (step + 1)
                 log_dict.update({
                     "train/data_time_ms": data_time * 1000,
                     "train/avg_data_time_ms": avg_data_time * 1000,
                 })
-            
-            # visualize periodically
+
             if step % vis_freq == 0:
                 with torch.no_grad():
                     samples, _, _ = model(obs_norm, goal_norm, goal_xy)
@@ -132,8 +127,7 @@ def train_epoch(model, dataloader, optimizer, device, context_size, log_freq, us
                     plt.close(traj_fig)
             
             wandb.log(log_dict)
-        
-        # step-based evaluation
+
         if eval_step_freq and test_loaders and current_step > 0 and current_step % eval_step_freq == 0:
             model.eval()
             for name, loader in test_loaders.items():
@@ -141,15 +135,13 @@ def train_epoch(model, dataloader, optimizer, device, context_size, log_freq, us
                 print(f"eval (step {current_step}) {name}: {eval_loss:.4f}")
             model.train()
             enc.eval()  # keep encoder frozen
-        
-        # step-based checkpoint saving
+
         if checkpoint_step_freq and save_checkpoint_fn and current_step > 0 and current_step % checkpoint_step_freq == 0:
             save_checkpoint_fn(current_step)
     
     avg_data_time = total_data_time / max(len(dataloader), 1)
     print(f"epoch data loading: total {total_data_time:.2f}s, avg per batch {avg_data_time*1000:.2f}ms")
-    
-    # print dataset statistics from workers (if available)
+
     try:
         dataset = dataloader.dataset
         if hasattr(dataset, 'print_stats'):
@@ -160,7 +152,7 @@ def train_epoch(model, dataloader, optimizer, device, context_size, log_freq, us
                     print(f"dataset {i}:")
                     ds.print_stats()
     except Exception as e:
-        pass  # ignore errors in stats printing
+        pass
     
     if use_wandb and wandb:
         wandb.log({
@@ -267,13 +259,11 @@ def build_dataloaders(config: Dict):
                     dataset, batch_size=config["eval_batch_size"], shuffle=False, num_workers=0
                 )
 
-    # optimize prefetch_factor based on batch size and num_workers
     prefetch_factor = config.get("prefetch_factor", 2)
     num_workers = config.get("num_workers", 0)
 
     if num_workers > 0:
-        # increase prefetch for better gpu utilization, especially for hdd
-        # more workers = can handle more prefetched batches
+        # scale prefetch with batch_size/num_workers to keep GPU fed on HDD-backed datasets
         prefetch_factor = max(prefetch_factor, min(4, max(2, config["batch_size"] // max(1, num_workers // 2))))
         print(f"dataloader: {num_workers} workers, prefetch_factor={prefetch_factor}")
 
@@ -372,8 +362,7 @@ def main(config: Dict):
     cudnn.benchmark = True
 
     train_loader, test_loaders = build_dataloaders(config)
-    
-    # calculate and print dataset and training info
+
     total_dataset_size = len(train_loader.dataset)
     steps_per_epoch = len(train_loader)
     total_epochs = config["epochs"]
@@ -388,8 +377,7 @@ def main(config: Dict):
     print(f"Total epochs: {total_epochs}")
     print(f"Total training steps: {total_steps:,}")
     print("=" * 60)
-    
-    # print test dataset sizes
+
     if test_loaders:
         print("\nTest datasets:")
         for name, loader in test_loaders.items():
@@ -425,7 +413,6 @@ def main(config: Dict):
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs"]) if config["scheduler"] else None
 
-    # load checkpoint if provided
     start_epoch = 0
     global_step = 0
     if config.get("resume_checkpoint"):
@@ -456,7 +443,7 @@ def main(config: Dict):
     
     def save_checkpoint(step, epoch=None):
         base_model = model.module if hasattr(model, "module") else model
-        # save full trainable state (skip frozen vjepa2 encoder weights)
+        # skip frozen vjepa2 encoder weights to keep checkpoints small
         sd = {k: v for k, v in base_model.state_dict().items() if not k.startswith("encoder.")}
         ckpt = {
             "epoch": epoch if epoch is not None else -1,

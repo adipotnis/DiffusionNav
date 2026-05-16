@@ -61,7 +61,6 @@ def yaw_rotmat(yaw: float) -> np.ndarray:
 
 def load_camera_intrinsics(dataset_name: str, config_path: Optional[str] = None) -> Optional[Dict]:
     """load camera intrinsics from data_config.yaml for rectification."""
-    # resolve config path relative to script location or use provided path
     if config_path is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         config_path = os.path.join(script_dir, "vint_train", "data", "data_config.yaml")
@@ -81,14 +80,12 @@ def load_camera_intrinsics(dataset_name: str, config_path: Optional[str] = None)
         if "camera_matrix" not in cam_metrics or "dist_coeffs" not in cam_metrics:
             return None
         
-        # build camera matrix
         fx = cam_metrics["camera_matrix"]["fx"]
         fy = cam_metrics["camera_matrix"]["fy"]
         cx = cam_metrics["camera_matrix"]["cx"]
         cy = cam_metrics["camera_matrix"]["cy"]
         camera_matrix = np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]], dtype=np.float32)
-        
-        # build distortion coefficients
+
         k1 = cam_metrics["dist_coeffs"]["k1"]
         k2 = cam_metrics["dist_coeffs"]["k2"]
         p1 = cam_metrics["dist_coeffs"]["p1"]
@@ -119,11 +116,9 @@ def to_local_coords(positions: np.ndarray, curr_pos: np.ndarray, curr_yaw: float
 def load_image(path: str, image_size: Tuple[int, int], camera_intrinsics: Optional[Dict] = None) -> torch.Tensor:
     """optimized image loading with reduced overhead. optionally rectifies image first."""
     img = Image.open(path)
-    # convert to rgb if needed (faster than letting PIL handle it)
     if img.mode != 'RGB':
         img = img.convert('RGB')
-    
-    # apply rectification if intrinsics are provided
+
     if camera_intrinsics is not None:
         img_array = np.array(img)
         rectified = rectify_image(
@@ -137,7 +132,7 @@ def load_image(path: str, image_size: Tuple[int, int], camera_intrinsics: Option
     crop_h = h if w > h else int(w / IMAGE_ASPECT_RATIO)
     crop_w = int(h * IMAGE_ASPECT_RATIO) if w > h else w
     img = TF.center_crop(img, (crop_h, crop_w))
-    img = img.resize(image_size, Image.BILINEAR)  # explicit resampling
+    img = img.resize(image_size, Image.BILINEAR)
     return TF.to_tensor(img)
 
 
@@ -176,7 +171,6 @@ class VJEPADataset(Dataset):
         self.end_slack = end_slack
         self.normalize = normalize
         self.metric_waypoint_spacing = metric_waypoint_spacing
-        # if action_normalization_factor not provided, use default from metric spacing
         if action_normalization_factor is None:
             action_normalization_factor = metric_waypoint_spacing * waypoint_spacing
         self.action_normalization_factor = action_normalization_factor
@@ -186,7 +180,6 @@ class VJEPADataset(Dataset):
         self.use_lmdb_cache = use_lmdb_cache
         self.data_split_folder = data_split_folder
 
-        # load camera intrinsics for rectification if enabled
         self.camera_intrinsics = None
         if rectify_images and dataset_name:
             self.camera_intrinsics = load_camera_intrinsics(dataset_name)
@@ -195,16 +188,14 @@ class VJEPADataset(Dataset):
 
         self.traj_cache = {}
         self.index = []
-        
-        # initialize performance tracking attributes before using them
+
         self._traj_load_count = 0
         self._traj_cache_hits = 0
         self._image_load_count = 0
         self._image_lmdb_hits = 0
         self._image_load_times = []
-        
-        # pre-load all trajectories into cache for faster access
-        # this ensures each worker has trajectories cached immediately
+
+        # pre-load all trajectories so each worker has them cached immediately
         traj_load_start = time.time()
         print(f"[dataset init] pre-loading {len(traj_names)} trajectories into cache...")
         for traj_name in tqdm.tqdm(traj_names, desc="loading trajectories", disable=len(traj_names) < 10):
@@ -213,7 +204,7 @@ class VJEPADataset(Dataset):
         print(f"[dataset init] loaded {len(traj_names)} trajectories in {traj_load_time:.2f}s (avg {traj_load_time/len(traj_names)*1000:.1f}ms per traj)")
 
         for traj_name in traj_names:
-            traj_data = self.traj_cache[traj_name]  # use cached data
+            traj_data = self.traj_cache[traj_name]
             traj_len = len(traj_data["position"])
 
             begin = (context_size - 1) * waypoint_spacing
@@ -224,38 +215,33 @@ class VJEPADataset(Dataset):
                     self.index.append((traj_name, t, max_dist))
         
         print(f"[dataset init] created {len(self.index)} samples from {len(traj_names)} trajectories")
-        
-        # keep trajectory cache for faster access (workers will share via process-local cache)
-        # but keep a reference to traj_names for worker processes
+
+        # keep traj_names reference for worker processes (shared via process-local cache)
         self._traj_names = traj_names
-        # cache is already populated - keep it for faster access
-        
-        # build lmdb cache if enabled
+
         self._image_cache = None
         if self.use_lmdb_cache:
             self._build_lmdb_cache()
-        
+
         # register cleanup on exit to prevent semaphore leaks
         atexit.register(self.close)
 
     def _load_traj(self, traj_name: str) -> Dict:
         """load trajectory with caching and logging."""
         self._traj_load_count += 1
-        
-        # check instance cache first (fastest - no lock needed)
+
+        # instance cache is lock-free (fastest path)
         if traj_name in self.traj_cache:
             self._traj_cache_hits += 1
             return self.traj_cache[traj_name]
-        
-        # load from disk (cache miss)
+
         load_start = time.time()
         traj_path = os.path.join(self.data_folder, traj_name, "traj_data.pkl")
-        # use process-local cache to share across workers
+        # process-local cache shares across workers in same process
         traj_data = _load_traj_cached(traj_path)
         load_time = time.time() - load_start
         self.traj_cache[traj_name] = traj_data
-        
-        # log slow loads (only first few to avoid spam)
+
         if load_time > 0.1 and self._traj_load_count <= 5:
             print(f"[traj load] slow load: {traj_name} took {load_time*1000:.1f}ms")
         
@@ -267,8 +253,7 @@ class VJEPADataset(Dataset):
             img = Image.open(image_path)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
-            
-            # apply rectification if needed
+
             if self.camera_intrinsics is not None:
                 img_array = np.array(img)
                 rectified = rectify_image(
@@ -277,8 +262,7 @@ class VJEPADataset(Dataset):
                     self.camera_intrinsics["dist_coeffs"]
                 )
                 img = Image.fromarray(rectified)
-            
-            # apply transforms
+
             w, h = img.size
             crop_h = h if w > h else int(w / IMAGE_ASPECT_RATIO)
             crop_w = int(h * IMAGE_ASPECT_RATIO) if w > h else w
@@ -296,20 +280,18 @@ class VJEPADataset(Dataset):
 
         base_cache_filename = f"vjepa_dataset_{self.dataset_name or 'default'}.lmdb"
 
-        # Check for local copy in /tmp first (faster I/O on compute nodes)
+        # prefer local copy (faster I/O on compute nodes)
         lmdb_local_dir = os.environ.get("LMDB_LOCAL_DIR")
         if lmdb_local_dir and os.path.exists(os.path.join(lmdb_local_dir, base_cache_filename)):
             cache_filename = os.path.join(lmdb_local_dir, base_cache_filename)
             print(f"[lmdb cache] using local copy: {cache_filename}")
         else:
             cache_filename = os.path.join(self.data_split_folder, base_cache_filename)
-        
-        # build cache if it doesn't exist (only in main process)
+
         if not os.path.exists(cache_filename):
-            # check if another process is building it (lock file)
+            # lock file lets concurrent processes coordinate cache build
             lock_file = cache_filename + ".lock"
             if os.path.exists(lock_file):
-                # wait for other process to finish
                 print(f"[lmdb cache] waiting for cache to be built by another process...")
                 wait_start = time.time()
                 while os.path.exists(lock_file) and not os.path.exists(cache_filename):
@@ -323,16 +305,14 @@ class VJEPADataset(Dataset):
                     print(f"warning: lock file exists but cache not found, building cache...")
             
             if not os.path.exists(cache_filename):
-                # create lock file
                 with open(lock_file, "w") as f:
                     f.write(str(os.getpid()))
-                
+
                 try:
                     build_start = time.time()
                     print(f"[lmdb cache] building cache: {cache_filename}")
                     print("[lmdb cache] this is a one-time operation and may take a while...")
-                    
-                    # collect all unique image paths from index
+
                     collect_start = time.time()
                     image_paths = set()
                     for traj_name, t, _ in tqdm.tqdm(self.index, desc="collecting image paths"):
@@ -341,8 +321,7 @@ class VJEPADataset(Dataset):
                             image_paths.add(image_path)
                     collect_time = time.time() - collect_start
                     print(f"[lmdb cache] collected {len(image_paths)} unique image paths in {collect_time:.1f}s")
-                    
-                    # process and write images to lmdb
+
                     write_start = time.time()
                     with lmdb.open(cache_filename, map_size=2**40) as image_cache:
                         with image_cache.begin(write=True) as txn:
@@ -350,12 +329,10 @@ class VJEPADataset(Dataset):
                             failed_count = 0
                             for image_path in tqdm.tqdm(image_paths, desc="processing and caching images"):
                                 try:
-                                    # process image to tensor
                                     tensor = self._process_image_to_tensor(image_path)
                                     if tensor is not None:
-                                        # encode tensor to bytes (float32, [C, H, W])
+                                        # tensor stored as float32 [C, H, W] bytes, keyed by image path
                                         tensor_bytes = tensor.numpy().tobytes()
-                                        # store with image path as key
                                         key = image_path.encode()
                                         txn.put(key, tensor_bytes)
                                         cached_count += 1
@@ -371,21 +348,19 @@ class VJEPADataset(Dataset):
                     print(f"[lmdb cache] processing+write time: {write_time:.1f}s, total build time: {build_time:.1f}s")
                     print(f"[lmdb cache] cache built: {cache_filename}")
                 finally:
-                    # remove lock file
                     if os.path.exists(lock_file):
                         os.remove(lock_file)
-        
-        # open cache in read-only mode (fast, no locking needed)
+
+        # read-only open is lock-free and supports many concurrent readers
         try:
             open_start = time.time()
             self._image_cache = lmdb.open(
-                cache_filename, 
-                readonly=True, 
-                lock=False, 
+                cache_filename,
+                readonly=True,
+                lock=False,
                 max_readers=256,
-                metasync=False,  # disable metadata sync for read-only (faster)
+                metasync=False,
             )
-            # register connection for cleanup
             _lmdb_connections.append(self._image_cache)
             _register_lmdb_cleanup()
             open_time = time.time() - open_start
@@ -405,25 +380,19 @@ class VJEPADataset(Dataset):
         """restore state and open lmdb cache with proper cleanup support."""
         restore_start = time.time()
         self.__dict__ = state
-        
-        # re-initialize performance tracking
+
         self._traj_load_count = 0
         self._traj_cache_hits = 0
         self._image_load_count = 0
         self._image_lmdb_hits = 0
         self._image_load_times = []
-        
-        # pre-load trajectories for this worker (lazy loading - use process-local cache)
-        # don't keep all trajectories in instance cache to save memory
-        # they'll be loaded on-demand from process-local cache
+
+        # clear instance cache; workers will lazy-load via process-local cache to save memory
         if hasattr(self, '_traj_names') and self._traj_names:
             print(f"[worker init] worker {os.getpid()} will load {len(self._traj_names)} trajectories on-demand")
-            # clear instance cache to save memory - use process-local cache instead
             self.traj_cache = {}
-        
-        # open lmdb cache for workers (with proper cleanup)
+
         if self.use_lmdb_cache:
-            # Check for local copy in /tmp first (faster I/O on compute nodes)
             base_cache_filename = f"vjepa_dataset_{self.dataset_name or 'default'}.lmdb"
             lmdb_local_dir = os.environ.get("LMDB_LOCAL_DIR")
             if lmdb_local_dir and os.path.exists(os.path.join(lmdb_local_dir, base_cache_filename)):
@@ -435,13 +404,12 @@ class VJEPADataset(Dataset):
                 try:
                     cache_open_start = time.time()
                     self._image_cache = lmdb.open(
-                        cache_filename, 
-                        readonly=True, 
-                        lock=False, 
+                        cache_filename,
+                        readonly=True,
+                        lock=False,
                         max_readers=256,
-                        metasync=False,  # disable metadata sync for read-only (faster)
+                        metasync=False,
                     )
-                    # register connection for cleanup
                     _lmdb_connections.append(self._image_cache)
                     _register_lmdb_cleanup()
                     cache_open_time = time.time() - cache_open_start
@@ -469,60 +437,52 @@ class VJEPADataset(Dataset):
         """explicitly close lmdb connection to prevent semaphore leaks."""
         if hasattr(self, '_image_cache') and self._image_cache is not None:
             try:
-                # remove from registry before closing
                 if self._image_cache in _lmdb_connections:
                     _lmdb_connections.remove(self._image_cache)
                 self._image_cache.close()
                 self._image_cache = None
             except Exception:
-                pass  # ignore errors during cleanup
+                pass
     
     def _load_image(self, traj_name: str, t: int) -> torch.Tensor:
         """load image with caching, logging, and performance tracking."""
         load_start = time.time()
         self._image_load_count += 1
         image_path = os.path.join(self.data_folder, traj_name, f"{t}.jpg")
-        
-        # try to load from lmdb cache first (fastest path - pre-processed tensor)
+
         if self.use_lmdb_cache and self._image_cache is not None:
             try:
                 lmdb_start = time.time()
-                # use context manager for transaction (auto-commits/aborts)
                 with self._image_cache.begin(write=False, buffers=True) as txn:
                     tensor_bytes = txn.get(image_path.encode(), default=None)
                 lmdb_time = time.time() - lmdb_start
-                
+
                 if tensor_bytes is not None:
                     self._image_lmdb_hits += 1
-                    
-                    # decode tensor from bytes (much faster than processing!)
+
                     decode_start = time.time()
-                    # tensor was stored as float32 numpy array: [C, H, W]
+                    # cached tensor is float32 numpy [C, H, W]
                     tensor_array = np.frombuffer(tensor_bytes, dtype=np.float32)
                     tensor_array = tensor_array.reshape(3, self.image_size[1], self.image_size[0])
-                    # make array writable to avoid PyTorch warning
+                    # copy makes the buffer writable so torch doesn't warn
                     tensor_array = tensor_array.copy()
                     result = torch.from_numpy(tensor_array)
                     decode_time = time.time() - decode_start
-                    
+
                     load_time = time.time() - load_start
                     self._image_load_times.append(load_time)
-                    
-                    # log slow loads (only first few to avoid spam)
+
                     if load_time > 0.05 and self._image_load_count <= 10:
                         print(f"[image load] slow lmdb load: {traj_name}/{t}.jpg took {load_time*1000:.1f}ms "
                               f"(lmdb={lmdb_time*1000:.1f}ms, decode={decode_time*1000:.1f}ms)")
                     return result
             except Exception as e:
-                # fallback to direct file read if lmdb fails
                 if self._image_load_count <= 5:
                     print(f"[image load] lmdb error for {traj_name}/{t}.jpg: {e}, falling back to disk")
-        
-        # fallback to direct file loading
+
         result = load_image(image_path, self.image_size, self.camera_intrinsics)
         load_time = time.time() - load_start
         self._image_load_times.append(load_time)
-        # log slow disk loads
         if load_time > 0.1 and self._image_load_count <= 10:
             print(f"[image load] slow disk load: {traj_name}/{t}.jpg took {load_time*1000:.1f}ms")
         return result
@@ -534,7 +494,6 @@ class VJEPADataset(Dataset):
         if len(yaw.shape) == 2:
             yaw = yaw.squeeze(1)
 
-        # pad if needed
         if len(yaw) < self.len_traj_pred + 1:
             pad_len = self.len_traj_pred + 1 - len(yaw)
             yaw = np.concatenate([yaw, np.repeat(yaw[-1], pad_len)])
@@ -546,7 +505,7 @@ class VJEPADataset(Dataset):
         else:
             actions = waypoints[1:]
 
-        # normalize actions by normalization factor (convert meters to unitless)
+        # normalize from meters to unitless waypoint counts
         if self.normalize:
             actions[:, :2] /= self.action_normalization_factor
 
@@ -563,7 +522,6 @@ class VJEPADataset(Dataset):
         traj_data = self._load_traj(traj_name)
         traj_len = len(traj_data["position"])
 
-        # load context frames (context_size frames ending at curr_time)
         context_times = list(range(
             curr_time - (self.context_size - 1) * self.waypoint_spacing,
             curr_time + 1,
@@ -573,14 +531,14 @@ class VJEPADataset(Dataset):
         obs_image = torch.cat(images, dim=0)
         actions = self._compute_actions(traj_data, curr_time)
 
-        # randomized goal frame: pick a future frame in [min, max] frames ahead
+        # randomized goal frame so goal_xy != actions[-1] in general
         min_offset = max(1, self.min_action_dist) * self.waypoint_spacing
         max_offset = max(min_offset, int(max_dist))
         goal_offset = int(np.random.randint(min_offset, max_offset + 1))
         goal_time = min(curr_time + goal_offset, traj_len - 1)
         goal_image = self._load_image(traj_name, goal_time)
 
-        # goal_xy: position of the goal frame in current local frame
+        # goal_xy is the goal frame position expressed in the current local frame
         curr_pos = np.asarray(traj_data["position"][curr_time])
         curr_yaw = traj_data["yaw"][curr_time]
         if isinstance(curr_yaw, np.ndarray):

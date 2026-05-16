@@ -17,7 +17,6 @@ def remove_files_in_dir(dir_path: str):
 
 
 def main(args: argparse.Namespace):
-    # Get the names of the folders in the data directory that contain the file 'traj_data.pkl'
     folder_names = [
         f
         for f in os.listdir(args.data_dir)
@@ -25,15 +24,12 @@ def main(args: argparse.Namespace):
         and "traj_data.pkl" in os.listdir(os.path.join(args.data_dir, f))
     ]
 
-    # Randomly shuffle the names of the folders
     random.shuffle(folder_names)
 
-    # Split the names of the folders into train and test sets
     split_index = int(args.split * len(folder_names))
     train_folder_names = folder_names[:split_index]
     test_folder_names = folder_names[split_index:]
 
-    # Create directories for the train and test sets
     train_dir = os.path.join(args.data_splits_dir, args.dataset_name, "train")
     test_dir = os.path.join(args.data_splits_dir, args.dataset_name, "test")
     for dir_path in [train_dir, test_dir]:
@@ -44,7 +40,6 @@ def main(args: argparse.Namespace):
             print(f"Creating {dir_path}")
             os.makedirs(dir_path)
 
-    # Write the names of the train and test folders to files
     with open(os.path.join(train_dir, "traj_names.txt"), "w") as f:
         for folder_name in train_folder_names:
             f.write(folder_name + "\n")
@@ -55,7 +50,6 @@ def main(args: argparse.Namespace):
 
 
 if __name__ == "__main__":
-    # Set up the command line argument parser
     parser = argparse.ArgumentParser()
 
     parser.add_argument(

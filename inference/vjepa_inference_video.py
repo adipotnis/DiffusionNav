@@ -139,7 +139,7 @@ def render_frame(
     ax_goal.set_title(f"goal frame t={goal_t}")
     ax_goal.axis("off")
 
-    # exploration trajectories first (faded orange) so goal-directed sits on top
+    # draw exploration first so goal-directed sits on top
     for s in range(explore_pred_m.shape[0]):
         label = "exploration (null goal)" if s == 0 else None
         ax_traj.plot(explore_pred_m[s, :, 0], explore_pred_m[s, :, 1],
@@ -267,7 +267,7 @@ def main():
         goal_pred_m = goal_samples[0].cpu().numpy() * norm_factor
         explore_pred_m = explore_samples[0].cpu().numpy() * norm_factor
 
-        # for the panels: take the latest obs frame (last 3 channels) and the goal image
+        # latest obs frame lives in the last 3 channels
         obs_last = obs[0, -3:]
         goal_disp = goal_img[0]
         obs_rgb = tensor_to_rgb(obs_last)
