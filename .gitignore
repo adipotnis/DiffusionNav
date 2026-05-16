@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual envs
+.venv/
+venv/
+ENV/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ML artifacts
+wandb/
+logs/
+runs/
+outputs/
+checkpoints/
+*.pth
+*.ckpt
+*.pt
+
+# Local-only working dirs (not for public release)
+nomad_IGNORE/
+tooling_IGNORE/
+
+# LMDB caches (regeneratable from raw data)
+*.lmdb/
+lmdb_cache*/

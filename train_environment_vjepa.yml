@@ -1,0 +1,28 @@
+name: vjepa_train
+channels:
+- pytorch
+- nvidia
+- conda-forge
+- defaults
+dependencies:
+- python=3.12
+- pip
+- pip:
+  - torch>=2.1.0
+  - torchvision>=0.16.0
+  - torchaudio>=2.1.0
+  - numpy
+  - matplotlib
+  - tqdm
+  - opencv-python
+  - h5py
+  - wandb
+  - pillow
+  - pyyaml
+  - prettytable
+  - timm
+  - einops
+  - diffusers
+  - lmdb
+  - bagpy
+

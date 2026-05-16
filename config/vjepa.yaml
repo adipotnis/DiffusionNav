@@ -1,0 +1,84 @@
+project_name: vjepa2
+run_name: vjepa2
+
+# training setup
+use_wandb: True
+batch_size: 32
+eval_batch_size: 32
+epochs: 50
+vision_hidden_dim: 1024
+gpu_ids: [0]
+num_workers: 4
+prefetch_factor: 2
+lr: 2.5e-5  # scaled linearly with batch size from 5e-5 @ 64
+optimizer: adamw
+clipping: True
+max_norm: 1.5
+scheduler: "cosine"
+seed: 0
+
+# model params
+num_samples: 1  # number of samples for training visualization (use 1 to speed up training)
+inference_num_samples: 8  # number of trajectory samples to generate during inference
+num_diffusion_steps: 40
+denoiser_type: "unet"  # "mlp" or "unet" (defaults to "mlp")
+unet_down_dims: [256, 512, 1024]  # only used if denoiser_type="unet"
+
+# diffusion scheduler params (optional - defaults shown)
+diffusion_beta_schedule: "squaredcos_cap_v2"  # options: "linear", "scaled_linear", "squaredcos_cap_v2"
+diffusion_clip_sample: True  # enable/disable clipping of samples during diffusion (True/False)
+diffusion_clip_sample_range: 30.0  # clip range for samples: clips to [-range, +range] (only used if diffusion_clip_sample is True)
+diffusion_prediction_type: "epsilon"  # options: "epsilon", "v_prediction", "sample"
+
+# classifier-free guidance params (optional - defaults shown)
+cfg_dropout_prob: 0.5  # probability of dropping condition during training (0.0 to disable)
+cfg_guidance_scale: 1.0  # guidance scale for inference (1.0 = no guidance, typical: 1.5-3.0 for stronger conditioning)
+
+# normalization for the action space
+normalize: True
+# action_normalization_factor: 0.25  # optional: custom normalization factor (defaults to metric_waypoint_spacing * waypoint_spacing)
+
+# context
+context_size: 5
+
+# distance bounds for distance and action and distance predictions 
+distance:
+  min_dist_cat: 0
+  max_dist_cat: 20
+action:
+  min_dist_cat: 3
+  max_dist_cat: 20
+
+# action output params
+len_traj_pred: 16
+learn_angle: False
+
+# dataset specific parameters
+image_size: [256, 256] # vjepa2 expects 256x256
+datasets:
+  recon:
+    data_folder: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/datasets/recon
+    train: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/vint_train/data/data_splits/recon/train/ # path to train folder with traj_names.txt
+    test: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/vint_train/data/data_splits/recon/test/ # path to test folder with traj_names.txt
+    end_slack: 3 # because many trajectories end in collisions
+    metric_waypoint_spacing: 0.25 # meters between waypoints
+    rectify_images: False # rectify images using camera intrinsics from data_config.yaml
+    use_lmdb_cache: True  # use lmdb for faster image loading from hdd
+    dataset_weight: 1.0
+  scand:
+    data_folder: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/datasets/scand
+    train: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/vint_train/data/data_splits/scand/train/
+    test: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/vint_train/data/data_splits/scand/test/
+    end_slack: 3
+    metric_waypoint_spacing: 0.38  # meters between waypoints (from data_config.yaml)
+    rectify_images: False  # scand doesn't use rectification
+    use_lmdb_cache: True  # use lmdb for faster image loading from hdd
+    dataset_weight: 24.0  # upweight scand ~24x to match recon's effective sample count (11835/483)
+  
+# logging stuff
+print_log_freq: 50
+image_log_freq: 200  # reduced from 50 to 200 (log every 200 steps instead of 50) to speed up training
+eval_freq: 1
+eval_step_freq: 500  # increased from 200 to 500 to reduce eval overhead (every 500 steps)
+checkpoint_step_freq: 300  # increased from 300 to 1000 (save less frequently)
+use_residual: False # use residual trajectory in the model True or False

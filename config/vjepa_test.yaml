@@ -1,0 +1,55 @@
+# test config with spoof data
+project_name: vjepa2_test
+run_name: test
+
+# small settings for quick testing
+use_wandb: False
+batch_size: 2
+eval_batch_size: 2
+epochs: 2
+vision_hidden_dim: 256
+gpu_ids: [0]
+num_workers: 0
+lr: 1e-4
+optimizer: adamw
+clipping: True
+max_norm: 1.0
+scheduler: False
+seed: 42
+
+# model params
+num_samples: 2  # fewer samples for testing
+num_diffusion_steps: 10  # fewer steps for speed
+
+# normalization
+normalize: True
+
+# context
+context_size: 3  # smaller for testing
+len_traj_pred: 4  # shorter predictions
+
+# distance bounds
+distance:
+  min_dist_cat: 0
+  max_dist_cat: 20
+action:
+  min_dist_cat: 2
+  max_dist_cat: 20
+
+learn_angle: False
+image_size: [256, 256]
+
+# spoof dataset
+datasets:
+  spoof:
+    data_folder: datasets/spoof
+    train: datasets/spoof/splits/train/
+    test: datasets/spoof/splits/test/
+    end_slack: 3
+    metric_waypoint_spacing: 0.25
+
+# logging
+print_log_freq: 1
+image_log_freq: 10
+eval_freq: 1
+
