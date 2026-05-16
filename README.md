@@ -60,7 +60,6 @@ Scripts, grouped by purpose:
     locobot, sacson; dataset selected via `-d <tag>` against
     `vint_train/process_data/process_bags_config.yaml`). Requires the `rosbag` Python
     bindings; see `data_prep/setup_rosbag_env.sh`.
-  - `process_bag_diff.py` — variant of `process_bags.py` for differential-drive bags
   - `frames_to_video.py` — utility
 
 Each script directory is a Python package (has an `__init__.py`). Run
