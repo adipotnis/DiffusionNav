@@ -41,6 +41,7 @@ logs/
 runs/
 outputs/
 checkpoints/
+slurm_logs/
 *.pth
 *.ckpt
 *.pt

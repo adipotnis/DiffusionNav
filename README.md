@@ -5,6 +5,36 @@ policy on V-JEPA2 visual context features. Trajectories (waypoints) are
 predicted by a conditional 1D U-Net denoiser over a sequence of past frames
 and an optional goal image.
 
+Inspired by [visualnav-transformer](https://github.com/robodhruv/visualnav-transformer)
+(NoMaD / ViNT / GNM); the data pipeline and several training utilities are
+adapted from that codebase (see [Inherited from the original visualnav-transformer / NoMaD codebase](#inherited-from-the-original-visualnav-transformer--nomad-codebase) below).
+
+## Architecture
+
+```mermaid
+flowchart TD
+    obs["Obs clip<br/>B × 3 × Tc × H × W"] --> enc["V-JEPA2 ViT-L<br/>(frozen, shared)"]
+    goal["Goal image<br/>B × 3 × H × W"] --> enc
+    enc -->|obs tokens| po["Linear + obs type embed"]
+    enc -->|goal tokens| pg["Linear + goal type embed"]
+    po --> fuse["Fusion Transformer<br/>2 × encoder layers, 8 heads"]
+    pg --> fuse
+    fuse --> pool["CLS query +<br/>Multi-Head Attention pool"]
+    gxy["goal_xy"] --> gmlp["MLP"]
+    pool --> merge["Concat + Linear<br/>→ conditioning c"]
+    gmlp --> merge
+
+    x["Noisy action chunk x_t<br/>B × Tp × action_dim"] --> unet["Conditional 1D U-Net<br/>denoiser"]
+    t["timestep t"] --> tembed["Time MLP"] --> unet
+    merge --> unet
+    unet --> eps["Predicted noise ε"]
+```
+
+`Tc` = context frames, `Tp` = predicted-waypoint horizon (`len_traj_pred`).
+The V-JEPA2 encoder is loaded from `torch.hub` and kept frozen; everything
+downstream of it is trained. Classifier-free guidance drops the goal tokens
+at training time and is hoisted out of the diffusion loop at inference.
+
 ## Layout
 
 Library code at repo root (imported by the scripts below):
@@ -26,6 +56,11 @@ Scripts, grouped by purpose:
 - `data_prep/`
   - `data_split.py` — write `traj_names.txt` train/test split files for a processed dataset
   - `process_recon.py` — convert the RECON HDF5 release into the on-disk trajectory format
+  - `process_bags.py` — generic ROS-bag → trajectory converter (used for SCAND, tartan_drive,
+    locobot, sacson; dataset selected via `-d <tag>` against
+    `vint_train/process_data/process_bags_config.yaml`). Requires the `rosbag` Python
+    bindings; see `data_prep/setup_rosbag_env.sh`.
+  - `process_bag_diff.py` — variant of `process_bags.py` for differential-drive bags
   - `frames_to_video.py` — utility
 
 Each script directory is a Python package (has an `__init__.py`). Run

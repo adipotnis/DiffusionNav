@@ -303,9 +303,20 @@ def build_dataloaders(config: Dict):
     return train_loader, test_loaders
 
 
+def _expand_env_vars(obj):
+    if isinstance(obj, str):
+        return os.path.expandvars(obj)
+    if isinstance(obj, dict):
+        return {k: _expand_env_vars(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_expand_env_vars(v) for v in obj]
+    return obj
+
+
 def prepare_config(config_path: str) -> Dict:
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
+    cfg = _expand_env_vars(cfg)
 
     defaults = {
         "use_wandb": False, "batch_size": 32, "epochs": 50, "gpu_ids": [0],
