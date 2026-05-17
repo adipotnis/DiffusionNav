@@ -9,6 +9,12 @@ Inspired by [visualnav-transformer](https://github.com/robodhruv/visualnav-trans
 (NoMaD / ViNT / GNM); the data pipeline and several training utilities are
 adapted from that codebase (see [Inherited from the original visualnav-transformer / NoMaD codebase](#inherited-from-the-original-visualnav-transformer--nomad-codebase) below).
 
+## Demo
+
+Inference rollout on a SCAND clip (Jackal, GDC library):
+
+https://github.com/adipotnis/DiffusionNav/raw/main/assets/videos/clip_random_mdps_B_Jackal_Library_Sanjac_Sat_Nov_13_88_0.mp4
+
 ## Architecture
 
 ```mermaid
