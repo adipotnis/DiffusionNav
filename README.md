@@ -12,22 +12,14 @@ adapted from that codebase (see [Inherited from the original visualnav-transform
 ## Architecture
 
 ```mermaid
-flowchart TD
-    obs["Obs clip<br/>B × 3 × Tc × H × W"] --> enc["V-JEPA2 ViT-L<br/>(frozen, shared)"]
-    goal["Goal image<br/>B × 3 × H × W"] --> enc
-    enc -->|obs tokens| po["Linear + obs type embed"]
-    enc -->|goal tokens| pg["Linear + goal type embed"]
-    po --> fuse["Fusion Transformer<br/>2 × encoder layers, 8 heads"]
-    pg --> fuse
-    fuse --> pool["CLS query +<br/>Multi-Head Attention pool"]
-    gxy["goal_xy"] --> gmlp["MLP"]
-    pool --> merge["Concat + Linear<br/>→ conditioning c"]
-    gmlp --> merge
-
-    x["Noisy action chunk x_t<br/>B × Tp × action_dim"] --> unet["Conditional 1D U-Net<br/>denoiser"]
-    t["timestep t"] --> tembed["Time MLP"] --> unet
-    merge --> unet
-    unet --> eps["Predicted noise ε"]
+flowchart LR
+    obs["Obs clip"] --> enc["V-JEPA2 ViT-L<br/>(frozen)"]
+    goal["Goal img"] --> enc
+    enc --> fuse["Fusion Tx<br/>2L · 8H"] --> pool["CLS pool"] --> merge(("c"))
+    gxy["goal_xy"] --> gmlp["MLP"] --> merge
+    x["x_t"] --> unet["1D U-Net"]
+    t["t"] --> unet
+    merge --> unet --> eps["ε"]
 ```
 
 `Tc` = context frames, `Tp` = predicted-waypoint horizon (`len_traj_pred`).
