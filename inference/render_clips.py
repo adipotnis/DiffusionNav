@@ -24,9 +24,9 @@ CLIPS = [
     ("random_mdps_A_Jackal_Library_Fountain_Fri_Oct_29_10_0", 320, 80),
     ("random_mdps_A_Jackal_Library_AHG_Fri_Oct_29_8_0", 550, 80),
 ]
-DATA_ROOT = "/work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/datasets/scand"
-OUT_DIR = "/work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/inference_videos"
-CKPT = "/work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/logs/vjepa2/vjepa2_2026_05_05_20_30_41/latest.pth"
+DATA_ROOT = "<path-to-datasets>/scand"
+OUT_DIR = "<path-to-inference-videos>"
+CKPT = "<path-to-checkpoint>.pth"
 GOAL_OFFSET = 18
 NUM_SAMPLES = 8  # only used to size model.inference_num_samples (unused at sample time)
 N_GOAL = 1

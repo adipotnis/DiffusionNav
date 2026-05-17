@@ -57,18 +57,18 @@ learn_angle: False
 image_size: [256, 256] # vjepa2 expects 256x256
 datasets:
   recon:
-    data_folder: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/datasets/recon
-    train: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/vint_train/data/data_splits/recon/train/ # path to train folder with traj_names.txt
-    test: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/vint_train/data/data_splits/recon/test/ # path to test folder with traj_names.txt
+    data_folder: <path-to-datasets>/recon
+    train: <path-to-data-splits>/recon/train/ # path to train folder with traj_names.txt
+    test: <path-to-data-splits>/recon/test/ # path to test folder with traj_names.txt
     end_slack: 3 # because many trajectories end in collisions
     metric_waypoint_spacing: 0.25 # meters between waypoints
     rectify_images: False # rectify images using camera intrinsics from data_config.yaml
     use_lmdb_cache: True  # use lmdb for faster image loading from hdd
     dataset_weight: 1.0
   scand:
-    data_folder: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/datasets/scand
-    train: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/vint_train/data/data_splits/scand/train/
-    test: /work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/vint_train/data/data_splits/scand/test/
+    data_folder: <path-to-datasets>/scand
+    train: <path-to-data-splits>/scand/train/
+    test: <path-to-data-splits>/scand/test/
     end_slack: 3
     metric_waypoint_spacing: 0.38  # meters between waypoints (from data_config.yaml)
     rectify_images: False  # scand doesn't use rectification

@@ -1,5 +1,5 @@
 import os, pickle, numpy as np
-root = "/work/nvme/bgbm/apotnis2/vjepa_nav_train/visualnav-transformer/train/datasets/recon"
+root = "<path-to-datasets>/recon"
 out = []
 for d in sorted(os.listdir(root)):
     p = os.path.join(root, d, "traj_data.pkl")
