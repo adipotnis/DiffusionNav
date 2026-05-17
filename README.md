@@ -13,7 +13,7 @@ adapted from that codebase (see [Inherited from the original visualnav-transform
 
 Inference rollout on a SCAND clip (Jackal, GDC library):
 
-https://github.com/adipotnis/DiffusionNav/raw/main/assets/videos/clip_random_mdps_B_Jackal_Library_Sanjac_Sat_Nov_13_88_0.mp4
+![Inference demo](assets/videos/demo.gif)
 
 ## Architecture
 
