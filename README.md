@@ -15,6 +15,10 @@ Inference rollout on a SCAND clip (Jackal, GDC library):
 
 ![Inference demo](assets/videos/demo.gif)
 
+## Experiments
+
+Ablation + scaling sweep results (tables and plots): see [`experiments.md`](experiments.md).
+
 ## Architecture
 
 ```mermaid
