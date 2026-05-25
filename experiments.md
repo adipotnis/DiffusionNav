@@ -1,11 +1,16 @@
 # Experiments
 
-Ablation + scaling sweep over the V-JEPA2 + diffusion-policy training
-recipe. Each run varies a single config field off the baseline; all 8
-ran on a single A100 with a 4 h SLURM budget and were stopped at
-timeout (none reached the planned epoch count).
+Sweep results over the V-JEPA2 + diffusion-policy training recipe.
+Each version below is a self-contained batch of runs — table, plots,
+and raw CSV.
 
-## Eval summary
+## v1 — Initial ablation + scaling sweep
+
+Each run varies a single config field off the baseline; all 8 ran on a
+single A100 with a 4 h SLURM budget and were stopped at timeout (none
+reached the planned epoch count).
+
+### Eval summary
 
 All numbers are MSE on the held-out splits (lower is better). `train` is
 the mean training loss over the last 100 steps. `step / total` shows
@@ -22,7 +27,7 @@ how far each run got before the wall-clock cut it.
 | `scale_horizon8` | `len_traj_pred: 8` | 7,700 / 13,759 | **0.103** | 0.163 | 0.141 | **0.092** | **0.092** |
 | `scale_horizon24` | `len_traj_pred: 24` | 7,700 / 10,602 | 0.117 | 0.174 | 0.143 | 0.112 | 0.112 |
 
-## Plots
+### Plots
 
 Training loss (smoothed):
 
@@ -41,3 +46,7 @@ Last vs best eval MSE, side-by-side:
 ![Summary bars](assets/plots/sweep_v1/sweep_summary_bar.png)
 
 Raw numbers: [`assets/plots/sweep_v1/sweep_summary.csv`](assets/plots/sweep_v1/sweep_summary.csv).
+
+<!-- ## v2 — TBD
+Add the next sweep's section below, mirroring v1's structure:
+plots under `assets/plots/sweep_v2/`. -->
